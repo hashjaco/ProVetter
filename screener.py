@@ -4,8 +4,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
-from user import User
 import time
+from user import User
 from element import *
 
 
@@ -40,8 +40,8 @@ class JefeScreener:
                 user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15.2; rv:71.0) Gecko/20100101 Firefox/71.0'
                 options = webdriver.FirefoxOptions()
                 options.add_argument('--ignore-certificate-errors')
-                # options.add_argument(f'--user-agent={user_agent}')
-                # options.add_argument('--headless')
+                options.add_argument(f'--user-agent={user_agent}')
+                options.add_argument('--headless')
                 driver = webdriver.Firefox(options=options, executable_path='drivers/geckodriver')
 
             elif browser == "chrome":
@@ -49,7 +49,7 @@ class JefeScreener:
                         options = webdriver.ChromeOptions()
                         options.add_argument('--ignore-certificate-errors')
                         options.add_argument(f'user-agent={user_agent}')
-                        # options.add_argument('--headless')
+                        options.add_argument('--headless')
                         driver = webdriver.Chrome(options=options, executable_path='drivers/chromedriver76')
 
             wait = WebDriverWait(driver, 10, poll_frequency=1,
@@ -110,26 +110,36 @@ class JefeScreener:
         try:
             self.wait.until(EC.presence_of_element_located((By.NAME, usernameField)))
             print("\nLogging into Jefe...\n")
+            
+            # input username
             field = self.driver.find_element_by_name(usernameField)
             field.send_keys(self.user.getUsername())
+            
+            # input password
             field = self.driver.find_element_by_name(passwordField)
             field.send_keys(self.user.getPassword())
+            
             self.click(loginButton, "xpath")
             print("\nSuccessfully logged into Jefe!\n")
+            
         finally:
             pass
 
+        
     def goToProfile(self, pro_id):
         try:
             print(f"Navigating to profile page of pro #{pro_id}")
             self.driver.get(f"{jefeBaseUrl}workers/{pro_id}")
             print(f"On pro #{pro_id} profile page.\n")
+            
         except SessionNotCreatedException:
             pass
 
+        
     def getWorkHistory(self):
+        print("Getting table elements...\n")
+
         try:
-            print("Getting table elements...\n")
             web_table = self.tableToArray(workHistoryTableColumns, "xpath")
             work_history_details = []
             qualified_roles = {}
@@ -174,14 +184,18 @@ class JefeScreener:
                     details.update({label.get(column): cell.replace("[CURRENT] ", "")})
                     column += 1
                 work_history_details.append(details)
+                
             print("\nGot work history!\n")
             return self._getRoles(work_history_details)
+        
         except:
             print("Error while getting work history. 126")
             pass
 
+    # Determine which roles the new applicant can handle
     def getQualifiedRoles(self):
         michelin_pro = False
+        
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, workHistoryTab)))
             self.click(workHistoryTab, "xpath")
@@ -196,13 +210,16 @@ class JefeScreener:
             print("Error while getting qualified roles. 175-189")
             pass
 
+    
     def _getRoles(self, table):
         if table is None:
             print("Work history is empty...")
             return
+        
         roles = {}
         size = len(table)
         row = 0
+        
         try:
             while row < size:
                 data = table[row]
@@ -220,24 +237,28 @@ class JefeScreener:
                 if cell_array[1] == "years" or cell_array[1] == "year":
                     position = data.get("position")
                     number_of_years = int(cell_array[0])
+                    
                     if position in roles.keys():
                         roles[position] += number_of_years
                     else:
                         roles.update({position: number_of_years})
             return roles
+        
         except:
             print("Error while getting roles. 191")
             pass
 
+        
     def getReferences(self):
         try:
             print("Getting references...")
             cells = self.tableToArray(referenceTableColumns, "xpath")
+            
             if len(cells) < 1:
+                print("Applicant has not provided any references")
                 return
 
             references = {}
-
             label = {
                 0: "name",
                 1: "relationship",
@@ -248,12 +269,14 @@ class JefeScreener:
                 6: "last-sent",
                 7: "status"
             }
-
             table = self.tableToArray(referenceTableRows, "xpath")
+            
             for element in table:
                 print(element.text)
+                
             number_of_rows = len(self.tableToArray(referenceTableRows, "xpath"))
             number_of_columns = int(len(cells) / number_of_rows)
+            
             print("Number of rows: " + str(number_of_rows))
             print("Number of columns: " + str(number_of_columns))
 
@@ -268,8 +291,10 @@ class JefeScreener:
 
                 if details.get("status") == "Completed!" and details.get("is-good") == "-":
                     references.update({row: details})
+                    
             print("Size of references table: ", len(references))
             return references
+        
         except:
             print("Error while getting references.")
             pass
@@ -277,18 +302,27 @@ class JefeScreener:
     def reviewReferences(self):
         try:
             print("Reviewing pro's references...\n")
+            
             self.wait.until(EC.presence_of_element_located((By.XPATH, referencesTab)))
             self.click(referencesTab, "xpath")
+            
             references = self.getReferences()
+            
             if len(references) < 1:
                 print("There are no references to review. Throwing pro out.")
                 return
+            
             self._printReferences(references)
+            
+            # Scan responses from references
             status = self.reviewRefResponses(references)
             print("Reference review complete!\n")
+            
             if status > 1:
                 return True
+            
             return False
+        
         except:
             print("Error while reviewing references")
             pass
@@ -297,6 +331,7 @@ class JefeScreener:
         if table is None:
             print("Table is empty!")
             return
+        
         print("Printing references...")
         for position, reference in table.items():
             print("\nName of Reference: ", reference.get("name"),
@@ -310,6 +345,7 @@ class JefeScreener:
                   )
 
 
+    # Can I refactor this and break it down? Probably not. This is quite a task damnit.
     def reviewRefResponses(self, references):
         is_good = 1
         pro_approval_score = 0
@@ -319,12 +355,12 @@ class JefeScreener:
             for row, reference in references:
                 print("Checking reference row #", row)
 
+                # TODO: Move to elements and rename to something that makes some sort of sense. Action Bronson? 
                 action_bronson = "/html/body/div/div/div[2]/div[2]/div/section/section/div/div[2]/div[1]/div[3]/div[3]/div/div/div[2]/div/div[2]/table/tbody/tr[" + str(
                     row + 1) + "]/td[9]/span/button/div/span"
 
                 self.wait.until(EC.presence_of_element_located((By.XPATH, action_bronson)))
-                self.driver.execute_script("arguments[0].scrollIntoView();",
-                                           self.driver.find_element_by_xpath(action_bronson))
+                self.driver.execute_script("arguments[0].scrollIntoView();", self.driver.find_element_by_xpath(action_bronson))
                 self.actions.move_to_element(self.driver.find_element_by_xpath(action_bronson))
                 self.click(action_bronson, "xpath")
 
@@ -337,22 +373,27 @@ class JefeScreener:
                 if len(elements) > 0:
                     for element in elements:
                         print(element.text)
+                        
                     print("Xpath found! Converting table to array...")
                     index = 0
+                    
                     for rating in elements:
                         print(rating.text, end=" "),
+                        
                         if int(rating.text) < 4 and index != 2:
                             is_good = 0
                             break
                         index += 1
+                        
                 print("\nReviewing reference survey responses...\n")
                 survey_elements = self.driver.find_elements_by_xpath(referenceSurvey)
+                
                 for element in survey_elements:
                     print(element.text)
 
                 if survey_elements[0].text == "No" or survey_elements[1].text == "No":
                     is_good = 0
-
+                
                 def set_bad():
                     self.click(referenceBad, "xpath")
 
@@ -370,10 +411,13 @@ class JefeScreener:
 
             print("\nInspection complete!\n")
             return pro_approval_score
+        
         except:
             print("Error while assessing pro eligibility")
             pass
 
+        
+    # Role templates used to assign roles
     def server_template(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, eventServer)))
@@ -382,6 +426,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def busser_template(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, busser)))
@@ -390,6 +435,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def line_cook_template(self, duration):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, lineCookMed)))
@@ -406,6 +452,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def prep_cook_template(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, prepCook)))
@@ -414,6 +461,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def dishwasher_template(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, dishwasher)))
@@ -422,6 +470,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def pastry_cook_template(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, pastryCook)))
@@ -430,6 +479,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def foh_template(self, duration):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, fohHigh)))
@@ -449,6 +499,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def cashier_template(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, cashier)))
@@ -457,6 +508,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def barback_template(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, barback)))
@@ -465,6 +517,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def bartender_template(self, duration):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, bartenderHigh)))
@@ -481,6 +534,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def barista_template(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, baristaTemplate)))
@@ -489,6 +543,7 @@ class JefeScreener:
         except:
             pass
 
+        
     def get_action(self, position, duration=None):
         action = {
             "Server": self.server_template(),
@@ -507,13 +562,16 @@ class JefeScreener:
             "Bartender": self.bartender_template(duration),
             "Barista": self.barista_template()
         }
+        
         return action.get(position)
 
+    
     def addAttributes(self, qualified_roles):
         try:
             if qualified_roles is None:
                 print("Pro is not qualified for any roles.")
                 return
+            
             self.wait.until(EC.presence_of_element_located((By.XPATH, matchAttributesTab)))
             self.click(matchAttributesTab, "xpath")
 
@@ -526,10 +584,13 @@ class JefeScreener:
                 self.get_action(position, duration)
                 self.wait.until(EC.presence_of_element_located((By.XPATH, submitAttribute)))
                 self.click(submitAttribute, "xpath")
+                
         except:
             print("Error while adding attributes.")
             pass
 
+        
+    # Approve applicant for full-time hiring service
     def approveForFth(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, editProfile)))
@@ -537,10 +598,13 @@ class JefeScreener:
             self.wait.until(EC.presence_of_element_located((By.NAME, pxApprove)))
             self.click(pxApprove, "name")
             self.click(editorSubmit, "xpath")
+            
         except:
             print("Error while approving for fth.")
             pass
 
+        
+    # Archive pro for various reasons. Reasons defined, but not integrated into function
     def archivePro(self, archive_reason=None):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, optionsDropDown)))
@@ -548,18 +612,24 @@ class JefeScreener:
             self.wait.until(EC.presence_of_element_located((By.XPATH, archivePro)))
             self.click(archivePro, "xpath")
             self.wait.until(EC.presence_of_element_located((By.XPATH, submitArchive)))
+            
         except:
             print("Error while finalizing pro")
 
+            
+    # Push new contractor onto the platform. Congratulations, my guy.
     def finalizePro(self):
         try:
             self.wait.until(EC.presence_of_element_located((By.XPATH, optionsDropDown)))
             self.click(optionsDropDown, "xpath")
             self.wait.until(EC.presence_of_element_located((By.XPATH, matchToShifts)))
             self.click(matchToShifts, "xpath")
+            
         except:
             pass
 
+        
+    # Death for the webdriver
     def killDriver(self):
         try:
             self.driver.close()
@@ -567,6 +637,8 @@ class JefeScreener:
         except:
             pass
 
+        
+    # The function nesting all helpers above. A perfect example of modular programming
     def screenThem(self):
         while len(self.pros) > 0 and self.keep_running is True:
             next_pro = self.pros.pop()
@@ -591,6 +663,8 @@ class JefeScreener:
                 pass
         self.killDriver()
 
+    
+    # I wonder what this does
     def test(self):
         self.goToProfile("3855")
         self.driver.maximize_window()
@@ -600,5 +674,7 @@ class JefeScreener:
 
         self.killDriver()
 
+        
+    # I really don't know why this redundant function is here. I wrote this program a couple of years ago
     def run(self):
         self.screenThem()
