@@ -1,8 +1,7 @@
 from screener import *
+from decouple import config
 
 if __name__ == "__main__":
-    # username = input("Enter your Pared admin email address: ")
-    # password = input("Enter your Pared admin password: ")
-    user = User("hashim@pared.com", "Hkhalidj86!")
-    screener = JefeScreener(["24228"], user, 'firefox')
+    user = User(config("USERNAME"), config("SECRET"))
+    screener = JefeScreener(test_user=["24228"], user, browser='firefox')
     screener.run()
